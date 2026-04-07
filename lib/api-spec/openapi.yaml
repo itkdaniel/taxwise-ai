@@ -3,13 +3,34 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: TaxWise AI - W-2 Tax Return Automation API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: Auth
+    description: Browser and mobile authentication endpoints.
+  - name: Storage
+    description: Object storage upload and serving endpoints.
+  - name: openrouter
+    description: OpenRouter AI chat operations
+  - name: taxReturns
+    description: Tax return management and W-2 processing
+  - name: w2Documents
+    description: W-2 document ingestion and AI extraction
+  - name: aiAgent
+    description: AI agent service management and training
+  - name: knowledgeGraph
+    description: Knowledge graph entity management
+  - name: testReports
+    description: Test framework and reporting
+  - name: logs
+    description: Logging and monitoring
+  - name: users
+    description: User management and RBAC
+
 paths:
   /healthz:
     get:
@@ -24,7 +45,1121 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      summary: Get the currently authenticated user
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '200':
+          description: Auth status resolved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserEnvelope'
+
+  /login:
+    get:
+      tags: [Auth]
+      operationId: beginBrowserLogin
+      summary: Start the browser OIDC login flow
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to the OIDC authorization endpoint.
+
+  /callback:
+    get:
+      tags: [Auth]
+      operationId: handleBrowserLoginCallback
+      summary: Complete the browser OIDC login flow
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: iss
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uri
+      responses:
+        '302':
+          description: Redirect to the returnTo path on success.
+
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutBrowserSession
+      summary: Clear the session and begin OIDC logout
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '302':
+          description: Redirect to the OIDC provider logout URL.
+
+  /mobile-auth/token-exchange:
+    post:
+      tags: [Auth]
+      operationId: exchangeMobileAuthorizationCode
+      summary: Exchange a mobile OIDC code for a session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileTokenExchangeRequest'
+      responses:
+        '200':
+          description: Session created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileTokenExchangeSuccess'
+        '400':
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /mobile-auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logoutMobileSession
+      summary: Delete a mobile session token
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      responses:
+        '200':
+          description: Logout processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutSuccess'
+
+  /storage/uploads/request-url:
+    post:
+      tags: [Storage]
+      operationId: requestUploadUrl
+      summary: Request a presigned URL for file upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadUrlRequest'
+      responses:
+        '200':
+          description: Presigned upload URL generated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadUrlResponse'
+        '400':
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /storage/public-objects/{filePath}:
+    get:
+      tags: [Storage]
+      operationId: getPublicObject
+      summary: Serve a public asset
+      parameters:
+        - name: filePath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Object content streamed.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: File not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /storage/objects/{objectPath}:
+    get:
+      tags: [Storage]
+      operationId: getStorageObject
+      summary: Serve an object entity
+      parameters:
+        - name: objectPath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Object content streamed.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Object not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /openrouter/conversations:
+    get:
+      operationId: listOpenrouterConversations
+      tags: [openrouter]
+      summary: List all conversations
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OpenrouterConversation"
+    post:
+      operationId: createOpenrouterConversation
+      tags: [openrouter]
+      summary: Create a new conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOpenrouterConversationBody"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenrouterConversation"
+
+  /openrouter/conversations/{id}:
+    get:
+      operationId: getOpenrouterConversation
+      tags: [openrouter]
+      summary: Get conversation with messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenrouterConversationWithMessages"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenrouterError"
+    delete:
+      operationId: deleteOpenrouterConversation
+      tags: [openrouter]
+      summary: Delete a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenrouterError"
+
+  /openrouter/conversations/{id}/messages:
+    get:
+      operationId: listOpenrouterMessages
+      tags: [openrouter]
+      summary: List messages in a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OpenrouterMessage"
+    post:
+      operationId: sendOpenrouterMessage
+      tags: [openrouter]
+      summary: Send a message and receive an AI response (SSE stream)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendOpenrouterMessageBody"
+      responses:
+        "200":
+          description: SSE stream of assistant response chunks
+          content:
+            text/event-stream: {}
+
+  /tax-returns:
+    get:
+      operationId: listTaxReturns
+      tags: [taxReturns]
+      summary: List all tax returns for the current user
+      responses:
+        "200":
+          description: List of tax returns
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaxReturn"
+    post:
+      operationId: createTaxReturn
+      tags: [taxReturns]
+      summary: Create a new tax return
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaxReturnBody"
+      responses:
+        "201":
+          description: Created tax return
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxReturn"
+
+  /tax-returns/{id}:
+    get:
+      operationId: getTaxReturn
+      tags: [taxReturns]
+      summary: Get a specific tax return with full details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tax return with details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxReturnDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    put:
+      operationId: updateTaxReturn
+      tags: [taxReturns]
+      summary: Update a tax return
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaxReturnBody"
+      responses:
+        "200":
+          description: Updated tax return
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxReturn"
+    delete:
+      operationId: deleteTaxReturn
+      tags: [taxReturns]
+      summary: Delete a tax return
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /tax-returns/{id}/calculate:
+    post:
+      operationId: calculateTaxReturn
+      tags: [taxReturns]
+      summary: Run AI-powered tax calculation on a return
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Calculation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxCalculationResult"
+
+  /tax-returns/{id}/validate:
+    post:
+      operationId: validateTaxReturn
+      tags: [taxReturns]
+      summary: Validate a tax return for completeness and accuracy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxValidationResult"
+
+  /tax-returns/summary:
+    get:
+      operationId: getTaxReturnSummary
+      tags: [taxReturns]
+      summary: Get summary dashboard stats for the current user
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxReturnSummary"
+
+  /w2-documents:
+    get:
+      operationId: listW2Documents
+      tags: [w2Documents]
+      summary: List all W-2 documents
+      parameters:
+        - name: taxReturnId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of W-2 documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/W2Document"
+    post:
+      operationId: createW2Document
+      tags: [w2Documents]
+      summary: Create a W-2 document record (manual entry)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateW2DocumentBody"
+      responses:
+        "201":
+          description: Created W-2 document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/W2Document"
+
+  /w2-documents/{id}:
+    get:
+      operationId: getW2Document
+      tags: [w2Documents]
+      summary: Get a specific W-2 document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: W-2 document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/W2Document"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    put:
+      operationId: updateW2Document
+      tags: [w2Documents]
+      summary: Update a W-2 document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateW2DocumentBody"
+      responses:
+        "200":
+          description: Updated W-2 document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/W2Document"
+    delete:
+      operationId: deleteW2Document
+      tags: [w2Documents]
+      summary: Delete a W-2 document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /w2-documents/{id}/extract:
+    post:
+      operationId: extractW2Data
+      tags: [w2Documents]
+      summary: Trigger AI extraction on an uploaded W-2 document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Extraction result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/W2ExtractionResult"
+
+  /ai-agent/models:
+    get:
+      operationId: listAiModels
+      tags: [aiAgent]
+      summary: List available AI models and their configurations
+      responses:
+        "200":
+          description: List of AI models
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiModel"
+
+  /ai-agent/config:
+    get:
+      operationId: getAiAgentConfig
+      tags: [aiAgent]
+      summary: Get current AI agent configuration
+      responses:
+        "200":
+          description: AI agent configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiAgentConfig"
+    put:
+      operationId: updateAiAgentConfig
+      tags: [aiAgent]
+      summary: Update AI agent configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAiAgentConfigBody"
+      responses:
+        "200":
+          description: Updated config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiAgentConfig"
+
+  /ai-agent/datasets:
+    get:
+      operationId: listTrainingDatasets
+      tags: [aiAgent]
+      summary: List training datasets
+      responses:
+        "200":
+          description: List of datasets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrainingDataset"
+    post:
+      operationId: createTrainingDataset
+      tags: [aiAgent]
+      summary: Create a new training dataset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTrainingDatasetBody"
+      responses:
+        "201":
+          description: Created dataset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainingDataset"
+
+  /ai-agent/datasets/{id}/scrape:
+    post:
+      operationId: scrapeDataForDataset
+      tags: [aiAgent]
+      summary: Trigger web scraping to add training data to a dataset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScrapeDataBody"
+      responses:
+        "200":
+          description: Scraping job started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScrapeJobResult"
+
+  /ai-agent/train:
+    post:
+      operationId: startTrainingJob
+      tags: [aiAgent]
+      summary: Start a training job with a dataset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartTrainingJobBody"
+      responses:
+        "202":
+          description: Training job started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainingJob"
+
+  /ai-agent/training-jobs:
+    get:
+      operationId: listTrainingJobs
+      tags: [aiAgent]
+      summary: List all training jobs
+      responses:
+        "200":
+          description: List of training jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrainingJob"
+
+  /knowledge-graph/entities:
+    get:
+      operationId: listEntities
+      tags: [knowledgeGraph]
+      summary: List entities in the knowledge graph
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 100
+      responses:
+        "200":
+          description: List of entities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GraphEntity"
+    post:
+      operationId: createEntity
+      tags: [knowledgeGraph]
+      summary: Create a new entity in the knowledge graph
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEntityBody"
+      responses:
+        "201":
+          description: Created entity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraphEntity"
+
+  /knowledge-graph/entities/{id}:
+    get:
+      operationId: getEntity
+      tags: [knowledgeGraph]
+      summary: Get an entity with its connections
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Entity with connections
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraphEntityWithConnections"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    put:
+      operationId: updateEntity
+      tags: [knowledgeGraph]
+      summary: Update an entity
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEntityBody"
+      responses:
+        "200":
+          description: Updated entity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraphEntity"
+    delete:
+      operationId: deleteEntity
+      tags: [knowledgeGraph]
+      summary: Delete an entity and its connections
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /knowledge-graph/connections:
+    get:
+      operationId: listConnections
+      tags: [knowledgeGraph]
+      summary: List connections between entities
+      responses:
+        "200":
+          description: List of connections
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GraphConnection"
+    post:
+      operationId: createConnection
+      tags: [knowledgeGraph]
+      summary: Create a connection between two entities
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConnectionBody"
+      responses:
+        "201":
+          description: Created connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraphConnection"
+
+  /knowledge-graph/graph:
+    get:
+      operationId: getFullGraph
+      tags: [knowledgeGraph]
+      summary: Get full graph data for visualization
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: entityType
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Full graph data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraphData"
+
+  /test-reports:
+    get:
+      operationId: listTestReports
+      tags: [testReports]
+      summary: List all test reports
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: priority
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of test reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TestReport"
+    post:
+      operationId: createTestReport
+      tags: [testReports]
+      summary: Create a new test report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTestReportBody"
+      responses:
+        "201":
+          description: Created test report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestReport"
+
+  /test-reports/{id}:
+    get:
+      operationId: getTestReport
+      tags: [testReports]
+      summary: Get a specific test report with full details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Test report detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestReportDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    put:
+      operationId: updateTestReport
+      tags: [testReports]
+      summary: Update a test report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTestReportBody"
+      responses:
+        "200":
+          description: Updated test report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestReport"
+
+  /test-reports/{id}/export:
+    post:
+      operationId: exportTestReport
+      tags: [testReports]
+      summary: Export a test report (PDF/JSON/CSV)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportTestReportBody"
+      responses:
+        "200":
+          description: Export result with download URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResult"
+
+  /test-reports/run:
+    post:
+      operationId: runTests
+      tags: [testReports]
+      summary: Run test suite (unit, e2e, regression)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunTestsBody"
+      responses:
+        "202":
+          description: Tests started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestReport"
+
+  /test-reports/stats:
+    get:
+      operationId: getTestStats
+      tags: [testReports]
+      summary: Get aggregate test statistics
+      responses:
+        "200":
+          description: Test statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestStats"
+
+  /logs:
+    get:
+      operationId: listLogs
+      tags: [logs]
+      summary: Get application logs with filtering
+      parameters:
+        - name: level
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [debug, info, warn, error, critical]
+        - name: service
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 100
+      responses:
+        "200":
+          description: Log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LogEntry"
+
+  /users/me:
+    get:
+      operationId: getCurrentUser
+      tags: [users]
+      summary: Get the current user's profile and settings
+      responses:
+        "200":
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /users/me/settings:
+    put:
+      operationId: updateUserSettings
+      tags: [users]
+      summary: Update user settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserSettingsBody"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
 components:
+  parameters:
+    AuthorizationSessionHeader:
+      name: Authorization
+      in: header
+      required: false
+      description: Opaque session token — `Bearer <sid>`.
+      schema:
+        type: string
+    SessionCookie:
+      name: sid
+      in: cookie
+      required: false
+      description: Browser session cookie.
+      schema:
+        type: string
+
   schemas:
     HealthStatus:
       type: object
@@ -34,3 +1169,1019 @@ components:
       required:
         - status
 
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    AuthUser:
+      type: object
+      required: [id, email, firstName, lastName, profileImageUrl]
+      properties:
+        id:
+          type: string
+        email:
+          type: [string, 'null']
+          format: email
+        firstName:
+          type: [string, 'null']
+        lastName:
+          type: [string, 'null']
+        profileImageUrl:
+          type: [string, 'null']
+
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/AuthUser'
+            - type: 'null'
+
+    MobileTokenExchangeRequest:
+      type: object
+      required: [code, code_verifier, redirect_uri, state]
+      properties:
+        code:
+          type: string
+          minLength: 1
+        code_verifier:
+          type: string
+          minLength: 1
+        redirect_uri:
+          type: string
+          minLength: 1
+          format: uri
+        state:
+          type: string
+          minLength: 1
+        nonce:
+          type: string
+          minLength: 1
+
+    MobileTokenExchangeSuccess:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+
+    LogoutSuccess:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+
+    UploadUrlRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        size:
+          type: integer
+          minimum: 1
+        contentType:
+          type: string
+          minLength: 1
+
+    UploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL:
+          type: string
+          format: uri
+        objectPath:
+          type: string
+        metadata:
+          $ref: '#/components/schemas/UploadUrlRequest'
+
+    OpenrouterConversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - createdAt
+
+    OpenrouterMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        role:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - conversationId
+        - role
+        - content
+        - createdAt
+
+    CreateOpenrouterConversationBody:
+      type: object
+      properties:
+        title:
+          type: string
+      required:
+        - title
+
+    SendOpenrouterMessageBody:
+      type: object
+      properties:
+        content:
+          type: string
+      required:
+        - content
+
+    OpenrouterConversationWithMessages:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/OpenrouterMessage"
+      required:
+        - id
+        - title
+        - createdAt
+        - messages
+
+    OpenrouterError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    TaxReturn:
+      type: object
+      required: [id, userId, taxYear, status, filingStatus, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: string
+        taxYear:
+          type: integer
+        status:
+          type: string
+          enum: [draft, processing, validated, complete, error]
+        filingStatus:
+          type: string
+          enum: [single, married_filing_jointly, married_filing_separately, head_of_household, qualifying_widow]
+        totalWages:
+          type: [number, 'null']
+        federalTaxWithheld:
+          type: [number, 'null']
+        estimatedRefund:
+          type: [number, 'null']
+        estimatedOwed:
+          type: [number, 'null']
+        notes:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TaxReturnDetail:
+      allOf:
+        - $ref: "#/components/schemas/TaxReturn"
+        - type: object
+          properties:
+            w2Documents:
+              type: array
+              items:
+                $ref: "#/components/schemas/W2Document"
+            validationErrors:
+              type: array
+              items:
+                type: string
+
+    CreateTaxReturnBody:
+      type: object
+      required: [taxYear, filingStatus]
+      properties:
+        taxYear:
+          type: integer
+        filingStatus:
+          type: string
+          enum: [single, married_filing_jointly, married_filing_separately, head_of_household, qualifying_widow]
+        notes:
+          type: string
+
+    UpdateTaxReturnBody:
+      type: object
+      properties:
+        taxYear:
+          type: integer
+        filingStatus:
+          type: string
+          enum: [single, married_filing_jointly, married_filing_separately, head_of_household, qualifying_widow]
+        status:
+          type: string
+          enum: [draft, processing, validated, complete, error]
+        notes:
+          type: string
+
+    TaxCalculationResult:
+      type: object
+      required: [taxReturnId, totalWages, federalTaxWithheld, taxableIncome, taxLiability, effectiveTaxRate]
+      properties:
+        taxReturnId:
+          type: integer
+        totalWages:
+          type: number
+        federalTaxWithheld:
+          type: number
+        taxableIncome:
+          type: number
+        taxLiability:
+          type: number
+        effectiveTaxRate:
+          type: number
+        standardDeduction:
+          type: number
+        estimatedRefund:
+          type: number
+        estimatedOwed:
+          type: number
+        breakdown:
+          type: object
+          additionalProperties: true
+
+    TaxValidationResult:
+      type: object
+      required: [taxReturnId, isValid, errors, warnings]
+      properties:
+        taxReturnId:
+          type: integer
+        isValid:
+          type: boolean
+        errors:
+          type: array
+          items:
+            type: string
+        warnings:
+          type: array
+          items:
+            type: string
+        missingFields:
+          type: array
+          items:
+            type: string
+
+    TaxReturnSummary:
+      type: object
+      required: [totalReturns, completedReturns, pendingReturns, totalEstimatedRefunds, totalEstimatedOwed, byStatus]
+      properties:
+        totalReturns:
+          type: integer
+        completedReturns:
+          type: integer
+        pendingReturns:
+          type: integer
+        totalEstimatedRefunds:
+          type: number
+        totalEstimatedOwed:
+          type: number
+        byStatus:
+          type: object
+          additionalProperties:
+            type: integer
+        recentActivity:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaxReturn"
+
+    W2Document:
+      type: object
+      required: [id, taxReturnId, employerName, taxYear, status, createdAt]
+      properties:
+        id:
+          type: integer
+        taxReturnId:
+          type: integer
+        employerName:
+          type: string
+        employerEin:
+          type: [string, 'null']
+        taxYear:
+          type: integer
+        status:
+          type: string
+          enum: [pending, extracting, extracted, manual, error]
+        objectPath:
+          type: [string, 'null']
+        wagesAndTips:
+          type: [number, 'null']
+        federalIncomeTax:
+          type: [number, 'null']
+        socialSecurityWages:
+          type: [number, 'null']
+        socialSecurityTax:
+          type: [number, 'null']
+        medicareWages:
+          type: [number, 'null']
+        medicareTax:
+          type: [number, 'null']
+        stateWages:
+          type: [number, 'null']
+        stateTax:
+          type: [number, 'null']
+        state:
+          type: [string, 'null']
+        localWages:
+          type: [number, 'null']
+        localTax:
+          type: [number, 'null']
+        extractionConfidence:
+          type: [number, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateW2DocumentBody:
+      type: object
+      required: [taxReturnId, employerName, taxYear]
+      properties:
+        taxReturnId:
+          type: integer
+        employerName:
+          type: string
+        employerEin:
+          type: string
+        taxYear:
+          type: integer
+        objectPath:
+          type: string
+        wagesAndTips:
+          type: number
+        federalIncomeTax:
+          type: number
+        socialSecurityWages:
+          type: number
+        socialSecurityTax:
+          type: number
+        medicareWages:
+          type: number
+        medicareTax:
+          type: number
+        stateWages:
+          type: number
+        stateTax:
+          type: number
+        state:
+          type: string
+        localWages:
+          type: number
+        localTax:
+          type: number
+
+    UpdateW2DocumentBody:
+      type: object
+      properties:
+        employerName:
+          type: string
+        employerEin:
+          type: string
+        wagesAndTips:
+          type: number
+        federalIncomeTax:
+          type: number
+        socialSecurityWages:
+          type: number
+        socialSecurityTax:
+          type: number
+        medicareWages:
+          type: number
+        medicareTax:
+          type: number
+        stateWages:
+          type: number
+        stateTax:
+          type: number
+        state:
+          type: string
+        localWages:
+          type: number
+        localTax:
+          type: number
+        status:
+          type: string
+          enum: [pending, extracting, extracted, manual, error]
+
+    W2ExtractionResult:
+      type: object
+      required: [w2DocumentId, success, confidence]
+      properties:
+        w2DocumentId:
+          type: integer
+        success:
+          type: boolean
+        confidence:
+          type: number
+        extractedFields:
+          type: object
+          additionalProperties: true
+        errors:
+          type: array
+          items:
+            type: string
+
+    AiModel:
+      type: object
+      required: [id, name, provider, capabilities]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        provider:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+        isActive:
+          type: boolean
+        contextWindow:
+          type: integer
+
+    AiAgentConfig:
+      type: object
+      required: [primaryModel, temperature, maxTokens, enableOcr, enableWebScraping]
+      properties:
+        primaryModel:
+          type: string
+        fallbackModel:
+          type: [string, 'null']
+        temperature:
+          type: number
+        maxTokens:
+          type: integer
+        enableOcr:
+          type: boolean
+        enableWebScraping:
+          type: boolean
+        systemPrompt:
+          type: [string, 'null']
+
+    UpdateAiAgentConfigBody:
+      type: object
+      properties:
+        primaryModel:
+          type: string
+        fallbackModel:
+          type: string
+        temperature:
+          type: number
+        maxTokens:
+          type: integer
+        enableOcr:
+          type: boolean
+        enableWebScraping:
+          type: boolean
+        systemPrompt:
+          type: string
+
+    TrainingDataset:
+      type: object
+      required: [id, name, type, status, recordCount, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: [string, 'null']
+        type:
+          type: string
+          enum: [structured, unstructured, mixed, scraped]
+        status:
+          type: string
+          enum: [active, processing, archived]
+        recordCount:
+          type: integer
+        objectPath:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateTrainingDatasetBody:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [structured, unstructured, mixed, scraped]
+        objectPath:
+          type: string
+
+    ScrapeDataBody:
+      type: object
+      required: [urls]
+      properties:
+        urls:
+          type: array
+          items:
+            type: string
+            format: uri
+        maxDepth:
+          type: integer
+          default: 1
+        selectors:
+          type: array
+          items:
+            type: string
+
+    ScrapeJobResult:
+      type: object
+      required: [jobId, status, urlsQueued]
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        urlsQueued:
+          type: integer
+
+    StartTrainingJobBody:
+      type: object
+      required: [datasetId]
+      properties:
+        datasetId:
+          type: integer
+        modelName:
+          type: string
+        hyperparameters:
+          type: object
+          additionalProperties: true
+
+    TrainingJob:
+      type: object
+      required: [id, datasetId, status, createdAt]
+      properties:
+        id:
+          type: integer
+        datasetId:
+          type: integer
+        modelName:
+          type: [string, 'null']
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        progress:
+          type: [number, 'null']
+        metrics:
+          type: object
+          additionalProperties: true
+        errorMessage:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: [string, 'null']
+          format: date-time
+
+    GraphEntity:
+      type: object
+      required: [id, name, type, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+        description:
+          type: [string, 'null']
+        properties:
+          type: object
+          additionalProperties: true
+        color:
+          type: [string, 'null']
+        size:
+          type: [number, 'null']
+        connectionCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    GraphEntityWithConnections:
+      allOf:
+        - $ref: "#/components/schemas/GraphEntity"
+        - type: object
+          properties:
+            connections:
+              type: array
+              items:
+                $ref: "#/components/schemas/GraphConnection"
+
+    CreateEntityBody:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        description:
+          type: string
+        properties:
+          type: object
+          additionalProperties: true
+        color:
+          type: string
+        size:
+          type: number
+
+    UpdateEntityBody:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        description:
+          type: string
+        properties:
+          type: object
+          additionalProperties: true
+        color:
+          type: string
+        size:
+          type: number
+
+    GraphConnection:
+      type: object
+      required: [id, sourceId, targetId, relationshipType, createdAt]
+      properties:
+        id:
+          type: integer
+        sourceId:
+          type: integer
+        targetId:
+          type: integer
+        relationshipType:
+          type: string
+        weight:
+          type: [number, 'null']
+        properties:
+          type: object
+          additionalProperties: true
+        sourceName:
+          type: [string, 'null']
+        targetName:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateConnectionBody:
+      type: object
+      required: [sourceId, targetId, relationshipType]
+      properties:
+        sourceId:
+          type: integer
+        targetId:
+          type: integer
+        relationshipType:
+          type: string
+        weight:
+          type: number
+        properties:
+          type: object
+          additionalProperties: true
+
+    GraphData:
+      type: object
+      required: [nodes, edges]
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/GraphEntity"
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/GraphConnection"
+        stats:
+          type: object
+          properties:
+            totalNodes:
+              type: integer
+            totalEdges:
+              type: integer
+            clusters:
+              type: integer
+
+    TestReport:
+      type: object
+      required: [id, name, type, status, priority, totalTests, passedTests, failedTests, skippedTests, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+          enum: [unit, e2e, regression, integration]
+        status:
+          type: string
+          enum: [pending, running, passed, failed, partial, error]
+        priority:
+          type: string
+          enum: [critical, high, medium, low]
+        totalTests:
+          type: integer
+        passedTests:
+          type: integer
+        failedTests:
+          type: integer
+        skippedTests:
+          type: integer
+        duration:
+          type: [number, 'null']
+        environment:
+          type: [string, 'null']
+        branch:
+          type: [string, 'null']
+        commitHash:
+          type: [string, 'null']
+        tags:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TestReportDetail:
+      allOf:
+        - $ref: "#/components/schemas/TestReport"
+        - type: object
+          properties:
+            testCases:
+              type: array
+              items:
+                $ref: "#/components/schemas/TestCase"
+            errorMessages:
+              type: array
+              items:
+                type: string
+            reproductionSteps:
+              type: array
+              items:
+                type: string
+            screenshots:
+              type: array
+              items:
+                type: string
+
+    TestCase:
+      type: object
+      required: [id, reportId, name, status, priority]
+      properties:
+        id:
+          type: integer
+        reportId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: [string, 'null']
+        status:
+          type: string
+          enum: [pending, running, passed, failed, skipped, error]
+        priority:
+          type: string
+          enum: [critical, high, medium, low]
+        duration:
+          type: [number, 'null']
+        errorMessage:
+          type: [string, 'null']
+        stackTrace:
+          type: [string, 'null']
+        reproductionSteps:
+          type: array
+          items:
+            type: string
+        screenshots:
+          type: array
+          items:
+            type: string
+
+    CreateTestReportBody:
+      type: object
+      required: [name, type, priority]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [unit, e2e, regression, integration]
+        priority:
+          type: string
+          enum: [critical, high, medium, low]
+        environment:
+          type: string
+        branch:
+          type: string
+        commitHash:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    UpdateTestReportBody:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, passed, failed, partial, error]
+        priority:
+          type: string
+          enum: [critical, high, medium, low]
+        tags:
+          type: array
+          items:
+            type: string
+        environment:
+          type: string
+
+    ExportTestReportBody:
+      type: object
+      required: [format]
+      properties:
+        format:
+          type: string
+          enum: [pdf, json, csv, html]
+
+    ExportResult:
+      type: object
+      required: [downloadUrl, format, expiresAt]
+      properties:
+        downloadUrl:
+          type: string
+        format:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+
+    RunTestsBody:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [unit, e2e, regression, integration, all]
+        priority:
+          type: string
+          enum: [critical, high, medium, low]
+        filter:
+          type: string
+        environment:
+          type: string
+
+    TestStats:
+      type: object
+      required: [totalReports, totalTests, passRate, byType, byStatus, byPriority]
+      properties:
+        totalReports:
+          type: integer
+        totalTests:
+          type: integer
+        passRate:
+          type: number
+        byType:
+          type: object
+          additionalProperties:
+            type: integer
+        byStatus:
+          type: object
+          additionalProperties:
+            type: integer
+        byPriority:
+          type: object
+          additionalProperties:
+            type: integer
+        trend:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+              passRate:
+                type: number
+
+    LogEntry:
+      type: object
+      required: [id, level, message, service, timestamp]
+      properties:
+        id:
+          type: integer
+        level:
+          type: string
+          enum: [debug, info, warn, error, critical]
+        message:
+          type: string
+        service:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+
+    UserProfile:
+      type: object
+      required: [id, replitId, email, role, createdAt]
+      properties:
+        id:
+          type: integer
+        replitId:
+          type: string
+        email:
+          type: [string, 'null']
+        firstName:
+          type: [string, 'null']
+        lastName:
+          type: [string, 'null']
+        profileImageUrl:
+          type: [string, 'null']
+        role:
+          type: string
+          enum: [admin, analyst, viewer]
+        twoFactorEnabled:
+          type: boolean
+        settings:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+
+    UpdateUserSettingsBody:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [admin, analyst, viewer]
+        twoFactorEnabled:
+          type: boolean
+        settings:
+          type: object
+          additionalProperties: true
