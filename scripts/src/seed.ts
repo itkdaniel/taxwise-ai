@@ -4,16 +4,14 @@
  * Populates every database table with realistic mock data so all
  * application workflows can be exercised without real user auth.
  *
- * Run:  npx tsx scripts/seed.ts
+ * Run:  pnpm --filter @workspace/scripts run seed
  */
 
 import "dotenv/config";
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
-import * as schema from "../lib/db/src/schema/index.js";
 import {
+  db,
+  pool,
   usersTable,
-  sessionsTable,
   taxReturnsTable,
   w2DocumentsTable,
   trainingDatasetsTable,
@@ -25,13 +23,8 @@ import {
   logEntriesTable,
   conversations,
   messages,
-} from "../lib/db/src/schema/index.js";
+} from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
-
-const { Pool } = pg;
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const db = drizzle(pool, { schema });
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
