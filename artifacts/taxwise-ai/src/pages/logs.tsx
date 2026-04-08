@@ -43,7 +43,7 @@ export default function Logs() {
             <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-white" /></div>
           ) : (
             <div className="space-y-1">
-              {logs?.map(log => (
+              {logs?.map((log: any) => (
                 <div key={log.id} className="flex gap-4 hover:bg-white/5 py-0.5 px-2 rounded -mx-2 transition-colors">
                   <span className="text-gray-500 min-w-[170px] select-none">{new Date(log.timestamp).toISOString()}</span>
                   <span className={`min-w-[70px] font-bold select-none ${

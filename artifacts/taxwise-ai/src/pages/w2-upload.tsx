@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ObjectUploader } from "@workspace/object-storage-web";
 import { useToast } from "@/hooks/use-toast";
-import { useCreateW2Document, useCreateTaxReturn } from "@workspace/api-client-react";
+import { useCreateW2Document } from "@workspace/api-client-react";
 
 export default function W2Upload() {
   const { toast } = useToast();
