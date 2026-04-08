@@ -10,15 +10,15 @@ import { useToast } from "@/hooks/use-toast";
 export default function TaxReturnDetail() {
   const params = useParams();
   const id = parseInt(params.id || "0", 10);
-  const { data: taxReturn, isLoading } = useGetTaxReturn(id, { query: { enabled: !!id } });
-  const { data: w2s, isLoading: isW2Loading } = useListW2Documents({ taxReturnId: id }, { query: { enabled: !!id } });
+  const { data: taxReturn, isLoading } = useGetTaxReturn(id);
+  const { data: w2s, isLoading: isW2Loading } = useListW2Documents({ taxReturnId: id });
   const calculateMutation = useCalculateTaxReturn();
   const validateMutation = useValidateTaxReturn();
   const { toast } = useToast();
 
   const handleCalculate = async () => {
     try {
-      await calculateMutation.mutateAsync({ data: undefined as any }, { request: { method: 'POST', url: `/api/tax-returns/${id}/calculate` } as any } as any);
+      await calculateMutation.mutateAsync({ id });
       toast({ title: "Calculation complete", description: "Tax return calculated successfully." });
     } catch (err: any) {
       toast({ title: "Calculation failed", description: err.message, variant: "destructive" });
@@ -27,7 +27,7 @@ export default function TaxReturnDetail() {
 
   const handleValidate = async () => {
     try {
-      await validateMutation.mutateAsync({ data: undefined as any }, { request: { method: 'POST', url: `/api/tax-returns/${id}/validate` } as any } as any);
+      await validateMutation.mutateAsync({ id });
       toast({ title: "Validation complete", description: "Tax return validated successfully." });
     } catch (err: any) {
       toast({ title: "Validation failed", description: err.message, variant: "destructive" });
@@ -95,7 +95,7 @@ export default function TaxReturnDetail() {
               <Loader2 className="h-6 w-6 animate-spin mx-auto" />
             ) : w2s?.length ? (
               <div className="space-y-4">
-                {w2s.map(w2 => (
+                {w2s.map((w2: any) => (
                   <div key={w2.id} className="flex justify-between items-center p-3 border rounded-md">
                     <div>
                       <div className="font-medium">{w2.employerName}</div>

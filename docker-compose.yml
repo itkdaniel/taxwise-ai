@@ -1,0 +1,147 @@
+##############################################################################
+# TaxWise AI — Docker Compose (Production)
+#
+# Services:
+#   postgres       — Shared PostgreSQL database
+#   redis          — Cache layer for Python API
+#   api-server     — Node.js Express API (port 8080)
+#   python-api     — FastAPI microservice (port 8000)
+#   llm-service    — PyTorch LLM training + inference (port 9000)
+#   frontend       — React Vite SPA served via Nginx (port 80)
+#
+# Usage:
+#   docker compose up --build          # start all services
+#   docker compose up api-server       # start single service
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+##############################################################################
+
+version: "3.9"
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-taxwise}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-taxwise_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-taxwise}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-taxwise}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 3
+
+  # ── Node.js API Server ──────────────────────────────────────────────────────
+  api-server:
+    build:
+      context: .
+      dockerfile: artifacts/api-server/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      DATABASE_URL: postgresql://taxwise:taxwise_secret@postgres:5432/taxwise
+      SESSION_SECRET: ${SESSION_SECRET:-changeme}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── Python FastAPI Microservice ─────────────────────────────────────────────
+  python-api:
+    build:
+      context: services/python-api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - services/python-api/.env.production
+    environment:
+      DATABASE_URL: postgresql+psycopg2://taxwise:taxwise_secret@postgres:5432/taxwise
+      REDIS_URL: redis://redis:6379/0
+      LLM_SERVICE_URL: http://llm-service:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── LLM Microservice ────────────────────────────────────────────────────────
+  llm-service:
+    build:
+      context: services/llm-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      CHECKPOINTS_DIR: /checkpoints
+    volumes:
+      - llm_checkpoints:/checkpoints
+      - llm_model_cache:/model-cache
+    ports:
+      - "9000:9000"
+    # Uncomment for GPU support:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/healthz || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+  # ── React Frontend (Nginx) ──────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: artifacts/taxwise-ai/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api-server
+      - python-api
+    ports:
+      - "80:80"
+
+volumes:
+  postgres_data:
+  redis_data:
+  llm_checkpoints:
+  llm_model_cache:
+
+networks:
+  default:
+    driver: bridge

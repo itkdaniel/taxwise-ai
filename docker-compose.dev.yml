@@ -1,0 +1,37 @@
+##############################################################################
+# Development overrides — mount source code volumes for hot-reload.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+##############################################################################
+
+version: "3.9"
+
+services:
+
+  api-server:
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./artifacts/api-server/src:/workspace/artifacts/api-server/src
+      - ./lib:/workspace/lib
+
+  python-api:
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    env_file:
+      - services/python-api/.env.development
+    volumes:
+      - ./services/python-api:/app
+
+  llm-service:
+    command: uvicorn main:app --host 0.0.0.0 --port 9000 --reload
+    volumes:
+      - ./services/llm-service:/app
+
+  frontend:
+    # In dev, run Vite dev server directly instead of Nginx
+    build:
+      context: .
+      dockerfile: artifacts/taxwise-ai/Dockerfile.dev
+    volumes:
+      - ./artifacts/taxwise-ai/src:/workspace/artifacts/taxwise-ai/src
+    ports:
+      - "5173:5173"

@@ -16,9 +16,7 @@ export default function TestReports() {
   const [statusFilter, setStatusFilter] = useState("all");
   
   const { data: stats, isLoading: isStatsLoading } = useGetTestStats();
-  const { data: reports, isLoading: isReportsLoading } = useListTestReports({
-    limit: 100
-  });
+  const { data: reports, isLoading: isReportsLoading } = useListTestReports();
 
   const getPriorityColor = (p: string) => {
     switch (p) {

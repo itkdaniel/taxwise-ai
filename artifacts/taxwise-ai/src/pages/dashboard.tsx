@@ -1,13 +1,13 @@
 import { useGetTaxReturnSummary, useListTaxReturns } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, DollarSign, AlertCircle, CheckCircle2, Clock } from "lucide-react";
+import { FileText, DollarSign, AlertCircle, Upload } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 
 export default function Dashboard() {
   const { data: summary, isLoading: isSummaryLoading } = useGetTaxReturnSummary();
-  const { data: recentReturns, isLoading: isReturnsLoading } = useListTaxReturns({ limit: 5 });
+  const { data: recentReturns, isLoading: isReturnsLoading } = useListTaxReturns();
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">

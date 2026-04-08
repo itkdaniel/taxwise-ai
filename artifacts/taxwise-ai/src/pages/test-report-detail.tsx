@@ -9,7 +9,7 @@ import { Link } from "wouter";
 export default function TestReportDetail() {
   const params = useParams();
   const id = parseInt(params.id || "0", 10);
-  const { data: report, isLoading } = useGetTestReport(id, { query: { enabled: !!id } });
+  const { data: report, isLoading } = useGetTestReport(id);
 
   const getStatusIcon = (status: string) => {
     switch(status) {
@@ -87,7 +87,7 @@ export default function TestReportDetail() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {report.testCases?.map((tc) => (
+            {report.testCases?.map((tc: any) => (
               <div key={tc.id} className="p-4 border rounded-lg flex items-start gap-4 bg-background">
                 {getStatusIcon(tc.status)}
                 <div className="flex-1">
