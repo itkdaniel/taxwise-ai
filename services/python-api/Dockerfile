@@ -1,42 +1,52 @@
-# ── Stage 1: dependencies ─────────────────────────────────────────────────────
+# ── Stage 1: build / dependency resolution ───────────────────────────────────
 FROM python:3.11-slim AS deps
 
-WORKDIR /app
+WORKDIR /build
 
-# Install only production OS deps
+# Prevent .pyc bytecode files and enable unbuffered output
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Install build-time OS deps (needed to compile psycopg2 / numpy extensions)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential libpq-dev curl \
+    build-essential \
+    libpq-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy and install Python dependencies into an isolated prefix
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
-# ── Stage 2: runtime ──────────────────────────────────────────────────────────
+# ── Stage 2: runtime image ────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-# Copy installed packages from deps stage
-COPY --from=deps /usr/local/lib/python3.11 /usr/local/lib/python3.11
-COPY --from=deps /usr/local/bin /usr/local/bin
+# Prevent .pyc bytecode and enable unbuffered output
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    APP_ENV=production \
+    PYTHONPATH=/app
 
-# Runtime OS deps only (no build-essential)
+# Runtime-only OS packages (smaller image — no compiler)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 curl \
+    libpq5 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy application source
+# Copy pre-installed packages from the deps stage
+COPY --from=deps /install /usr/local
+
+# Copy application source — .dockerignore excludes __pycache__ and *.pyc
 COPY . .
 
 # Non-root user for security
-RUN useradd -m taxwise && chown -R taxwise /app
+RUN useradd -m taxwise && chown -R taxwise:taxwise /app
 USER taxwise
 
 EXPOSE 8000
-
-# Default: production server (override APP_ENV for dev)
-ENV APP_ENV=production
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD curl -f http://localhost:8000/healthz || exit 1

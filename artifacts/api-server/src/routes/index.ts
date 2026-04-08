@@ -10,6 +10,7 @@ import testReportsRouter from "./testReports";
 import logsRouter from "./logs";
 import usersRouter from "./users";
 import openrouterRouter from "./openrouter";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(testReportsRouter);
 router.use(logsRouter);
 router.use(usersRouter);
 router.use(openrouterRouter);
+router.use(adminRouter);
 
 export default router;

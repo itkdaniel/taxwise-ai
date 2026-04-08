@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { taxReturnsTable, w2DocumentsTable } from "@workspace/db";
+import { taxReturnsTable, w2DocumentsTable, usersTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import {
   CreateTaxReturnBody,
@@ -12,6 +12,7 @@ import {
   ValidateTaxReturnParams,
 } from "@workspace/api-zod";
 import { openrouter } from "@workspace/integrations-openrouter-ai";
+import { sendTaxSubmissionEmail } from "../../lib/email";
 
 const router: IRouter = Router();
 
@@ -246,6 +247,119 @@ router.post("/tax-returns/:id/calculate", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to calculate tax return");
     res.status(500).json({ error: "Failed to calculate tax return" });
+  }
+});
+
+router.post("/tax-returns/:id/submit", async (req, res) => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    res.status(400).json({ error: "Invalid ID" });
+    return;
+  }
+  try {
+    const [taxReturn] = await db
+      .select()
+      .from(taxReturnsTable)
+      .where(and(eq(taxReturnsTable.id, id), eq(taxReturnsTable.userId, req.user.id)));
+    if (!taxReturn) {
+      res.status(404).json({ error: "Tax return not found" });
+      return;
+    }
+    if (taxReturn.status === "complete") {
+      res.status(409).json({ error: "Tax return has already been submitted" });
+      return;
+    }
+
+    const w2Docs = await db
+      .select()
+      .from(w2DocumentsTable)
+      .where(eq(w2DocumentsTable.taxReturnId, id));
+
+    if (w2Docs.length === 0) {
+      res.status(422).json({ error: "Cannot submit: no W-2 documents attached" });
+      return;
+    }
+
+    const totalWages = w2Docs.reduce((s, d) => s + Number(d.wagesAndTips || 0), 0);
+    const federalTaxWithheld = w2Docs.reduce((s, d) => s + Number(d.federalIncomeTax || 0), 0);
+    const standardDeduction = taxReturn.filingStatus === "married_filing_jointly" ? 29200 : 14600;
+    const taxableIncome = Math.max(0, totalWages - standardDeduction);
+
+    let taxLiability = 0;
+    if (taxableIncome <= 11600) taxLiability = taxableIncome * 0.10;
+    else if (taxableIncome <= 47150) taxLiability = 1160 + (taxableIncome - 11600) * 0.12;
+    else if (taxableIncome <= 100525) taxLiability = 5426 + (taxableIncome - 47150) * 0.22;
+    else if (taxableIncome <= 191950) taxLiability = 17168.5 + (taxableIncome - 100525) * 0.24;
+    else taxLiability = 39110.5 + (taxableIncome - 191950) * 0.32;
+
+    const estimatedRefund = federalTaxWithheld > taxLiability ? federalTaxWithheld - taxLiability : 0;
+    const estimatedOwed = taxLiability > federalTaxWithheld ? taxLiability - federalTaxWithheld : 0;
+    const confirmationNumber = `TW-${taxReturn.taxYear}-${String(id).padStart(6, "0")}-${Date.now().toString(36).toUpperCase()}`;
+    const filedAt = new Date().toLocaleString("en-US", { timeZone: "UTC", timeZoneName: "short" });
+
+    await db.update(taxReturnsTable)
+      .set({
+        totalWages: String(totalWages),
+        federalTaxWithheld: String(federalTaxWithheld),
+        estimatedRefund: String(estimatedRefund),
+        estimatedOwed: String(estimatedOwed),
+        status: "complete",
+        notes: (taxReturn.notes ? taxReturn.notes + "\n" : "") + `Submitted: ${filedAt} | Confirmation: ${confirmationNumber}`,
+      })
+      .where(eq(taxReturnsTable.id, id));
+
+    const [dbUser] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, req.user.id));
+
+    const wantsPrintCopy = req.body?.wantsPrintCopy === true;
+
+    if (dbUser?.email) {
+      sendTaxSubmissionEmail({
+        to: dbUser.email,
+        firstName: dbUser.firstName,
+        taxYear: taxReturn.taxYear,
+        filingStatus: taxReturn.filingStatus,
+        confirmationNumber,
+        totalWages,
+        taxLiability,
+        federalTaxWithheld,
+        estimatedRefund,
+        estimatedOwed,
+        filedAt,
+        wantsPrintCopy,
+      }).catch((err) => req.log.error({ err }, "Failed to send confirmation email"));
+    }
+
+    res.json({
+      success: true,
+      confirmationNumber,
+      filedAt,
+      taxYear: taxReturn.taxYear,
+      filingStatus: taxReturn.filingStatus,
+      totalWages,
+      federalTaxWithheld,
+      taxableIncome,
+      taxLiability,
+      standardDeduction,
+      estimatedRefund,
+      estimatedOwed,
+      effectiveTaxRate: totalWages > 0 ? (taxLiability / totalWages) * 100 : 0,
+      wantsPrintCopy,
+      message: estimatedRefund > 0
+        ? `You are estimated to receive a refund of $${estimatedRefund.toFixed(2)}. Expect direct deposit within 21 days.`
+        : estimatedOwed > 0
+          ? `You owe $${estimatedOwed.toFixed(2)}. Pay by April 15 at irs.gov/payments/direct-pay.`
+          : "Your return has been submitted with no refund or amount owed.",
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to submit tax return");
+    res.status(500).json({ error: "Failed to submit tax return" });
   }
 });
 

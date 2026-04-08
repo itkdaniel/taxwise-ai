@@ -7,6 +7,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import NotFound from "@/pages/not-found";
 
 import Login from "@/pages/login";
+import Onboarding from "@/pages/onboarding";
 import Dashboard from "@/pages/dashboard";
 import TaxReturns from "@/pages/tax-returns";
 import TaxReturnDetail from "@/pages/tax-return-detail";
@@ -17,8 +18,16 @@ import TestReports from "@/pages/test-reports";
 import TestReportDetail from "@/pages/test-report-detail";
 import Logs from "@/pages/logs";
 import Settings from "@/pages/settings";
+import Admin from "@/pages/admin";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 30_000,
+    },
+  },
+});
 
 function ProtectedRouter() {
   return (
@@ -34,6 +43,7 @@ function ProtectedRouter() {
         <Route path="/test-reports/:id" component={TestReportDetail} />
         <Route path="/logs" component={Logs} />
         <Route path="/settings" component={Settings} />
+        <Route path="/admin" component={Admin} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>
@@ -44,6 +54,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      <Route path="/onboarding" component={Onboarding} />
       <Route path="/:rest*">
         <ProtectedRouter />
       </Route>

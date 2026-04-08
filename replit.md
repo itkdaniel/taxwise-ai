@@ -82,10 +82,13 @@ Full-stack agentic AI tax automation platform. pnpm monorepo with TypeScript thr
 - `GET|POST /openrouter/conversations`
 - `GET|DELETE /openrouter/conversations/:id`
 - `GET|POST /openrouter/conversations/:id/messages`
+- `POST /tax-returns/:id/submit` — IRS e-file submission; calculates taxes, sets status="complete", sends confirmation email, returns refund/owed
+- `GET /admin/stats` — admin-only platform stats (admin detection via `ADMIN_USER_IDS` / `ADMIN_EMAILS` env vars)
 
 ## Frontend Pages
 
 - `/` — Dashboard with stats and quick actions
+- `/onboarding` — 4-step wizard: document checklist → drag-drop OCR upload → SSN/routing/signatures → animated ToS iframe + IRS submit
 - `/tax-returns` — Tax returns list with status badges
 - `/tax-returns/:id` — Tax return detail + W-2 list
 - `/w2-upload` — Drag-drop upload + manual entry tabs
@@ -95,7 +98,24 @@ Full-stack agentic AI tax automation platform. pnpm monorepo with TypeScript thr
 - `/test-reports/:id` — Test case detail
 - `/logs` — Color-coded live log viewer
 - `/settings` — User profile, role, security settings
-- `/login` — Replit Auth login gate
+- `/admin` — Admin dashboard: platform stats, return status chart, recent users & returns tables
+- `/login` — Replit Auth login + guest mode (14-day trial via localStorage)
+
+## Auth & Sessions
+
+- Replit OIDC auth (`@workspace/replit-auth-web`) — primary auth path
+- Guest mode — `use-guest-session.ts` hook; stores session in `taxwise_guest_session` localStorage key with 14-day TTL; shows trial banner with days remaining via `app-layout.tsx`
+- Admin access controlled by `ADMIN_USER_IDS` (comma-sep Replit IDs) and `ADMIN_EMAILS` (comma-sep emails) env vars; frontend mirrors via `VITE_ADMIN_USER_IDS` / `VITE_ADMIN_EMAILS`
+
+## Email
+
+- Nodemailer in api-server (`src/lib/email.ts`) — SMTP env vars: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`
+- Falls back to `console.log` when SMTP is not configured (dev-friendly)
+- Confirmation email sent on IRS submission with refund/owed breakdown, direct-deposit timeline, "Where's My Refund?" link
+
+## Theme
+
+- Light / Dark / System toggle in sidebar via shadcn `DropdownMenu`; persisted in `localStorage` and propagates `dark` class to `<html>`
 
 ## Key Commands
 

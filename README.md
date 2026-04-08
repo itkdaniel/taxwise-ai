@@ -13,15 +13,22 @@
 |---------|-------------|
 | **AI-Powered OCR** | Extracts W-2 data (wages, EIN, withheld amounts) from PDF uploads using Google Gemini via OpenRouter |
 | **Manual Entry** | Fallback form-based W-2 entry with full validation |
-| **Tax Calculation** | 2024 IRS progressive bracket calculation (single, MFJ, HoH) |
+| **Tax Calculation** | 2024 IRS progressive bracket calculation (single, MFJ, HoH, MFS, Qualifying Widow) |
+| **IRS e-File Submission** | Async submit endpoint calculates taxes, updates status, and dispatches confirmation email |
+| **Email Confirmation** | Nodemailer-based email with refund/owed breakdown, direct-deposit timeline, and "Where's My Refund?" link |
+| **Onboarding Wizard** | 4-step guided flow: document checklist → drag-and-drop OCR upload → SSN/routing/signature → animated ToS iframe + submit |
+| **Guest Mode** | 14-day trial session (localStorage) — no account required to explore the full flow |
+| **Light / Dark Mode** | Sun/moon/system toggle in sidebar; persisted per-user via localStorage |
+| **Admin Dashboard** | Platform-wide stats: total users, returns, W-2s, refunds/owed; status chart; recent user & return tables |
 | **Knowledge Graph** | Interactive 3D (Three.js) and 2D force graph visualising taxpayer → employer → document relationships |
 | **Custom LLM Training** | Train custom language models from scratch using PyTorch + HuggingFace Transformers on scraped data |
 | **Web Scraper** | Async BFS crawler that collects training data from any website |
 | **LLM Benchmarking** | Perplexity, accuracy, and throughput metrics for trained models |
 | **Test Reports** | Color-coded test execution dashboard with per-case results and screenshots |
 | **System Logs** | Live-streamed, color-coded infrastructure logs (error/warn/info/debug) |
-| **RBAC Auth** | Replit OIDC authentication with role-based access (admin, tax_professional, client, viewer) |
+| **RBAC Auth** | Replit OIDC authentication with role-based access; guest trial session fallback |
 | **Caching** | Redis-backed response cache with Python decorator API |
+| **Docker** | Multi-stage builds with `PYTHONDONTWRITEBYTECODE=1`; `.dockerignore` excludes `__pycache__` and `*.pyc` |
 | **CI/CD** | GitHub Actions pipelines for lint, test, Docker build, and deploy |
 
 ---

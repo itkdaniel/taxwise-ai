@@ -1,0 +1,37 @@
+# Python bytecode — no .pyc files in Docker image
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Development & testing artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Environment files (injected at runtime, never baked into image)
+.env
+.env.*
+!.env.example
+
+# Git & IDE
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+
+# Docs
+*.md
+docs/
+
+# Logs
+*.log
+logs/
