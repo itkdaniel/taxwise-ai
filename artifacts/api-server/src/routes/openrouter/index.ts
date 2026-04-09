@@ -110,7 +110,7 @@ router.post("/openrouter/conversations/:id/messages", async (req, res) => {
     const chatMessages = history.map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
 
     const completion = await openrouter.chat.completions.create({
-      model: body.data.model || "google/gemini-flash-1.5",
+      model: "google/gemini-flash-1.5",
       max_tokens: 8192,
       messages: [{ role: "system", content: systemPrompt }, ...chatMessages],
     });
